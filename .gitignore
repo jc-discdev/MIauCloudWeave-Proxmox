@@ -60,3 +60,4 @@ dist/
 .wrangler/
 **.json
 mainpy.md
+backend/
