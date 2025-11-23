@@ -44,10 +44,43 @@ export default function ClusterCreator() {
     const [awsImageId, setAwsImageId] = useState('ami-03c1f788292172a4e');
     const [awsName, setAwsName] = useState('aws-cluster');
 
+    // Hybrid and cluster type state
+    const [clusterType, setClusterType] = useState<string>('');
+    const [isHybrid, setIsHybrid] = useState(false);
+
+
     useEffect(() => {
         async function loadTypes() {
             try {
-                if (provider === 'gcp') {
+                if (isHybrid) {
+                    // Parallel loading for hybrid mode - MUCH faster!
+                    const [gcpTypesRaw, awsTypesRaw] = await Promise.all([
+                        getGcpInstanceTypes(gcpZone, gcpCpus, gcpRam),
+                        getAwsInstanceTypes(awsRegion, awsVcpus, awsMemory)
+                    ]);
+
+                    // Process GCP types
+                    const x86GcpTypes = gcpTypesRaw.filter(t => !t.name.startsWith('t2a-'));
+                    setGcpTypes(x86GcpTypes);
+                    if (x86GcpTypes.length > 0) {
+                        setGcpSelectedType(prev => x86GcpTypes.find(t => t.name === prev) ? prev : x86GcpTypes[0].name);
+                    } else {
+                        setGcpSelectedType('');
+                    }
+
+                    // Process AWS types
+                    let x86AwsTypes = awsTypesRaw.filter(t => !t.instance_type.includes('g.'));
+                    x86AwsTypes.sort((a, b) => {
+                        if (a.vcpus !== b.vcpus) return a.vcpus - b.vcpus;
+                        return a.memory_gb - b.memory_gb;
+                    });
+                    setAwsTypes(x86AwsTypes);
+                    if (x86AwsTypes.length > 0) {
+                        setAwsSelectedType(prev => x86AwsTypes.find(t => t.instance_type === prev) ? prev : x86AwsTypes[0].instance_type);
+                    } else {
+                        setAwsSelectedType('');
+                    }
+                } else if (provider === 'gcp') {
                     const types = await getGcpInstanceTypes(gcpZone, gcpCpus, gcpRam);
                     // Filter out ARM instances (t2a) as we are using x86 images by default
                     const x86Types = types.filter(t => !t.name.startsWith('t2a-'));
@@ -85,10 +118,7 @@ export default function ClusterCreator() {
             }
         }
         loadTypes();
-    }, [provider, gcpZone, gcpCpus, gcpRam, awsRegion, awsVcpus, awsMemory]);
-
-    const [clusterType, setClusterType] = useState<string>('');
-    const [isHybrid, setIsHybrid] = useState(false);
+    }, [provider, gcpZone, gcpCpus, gcpRam, awsRegion, awsVcpus, awsMemory, isHybrid]);
 
     const handleCreate = async () => {
         setLoading(true);
