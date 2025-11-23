@@ -8,6 +8,7 @@ import {
     stopInstance,
     type Instance
 } from '../services/api';
+import CredentialsModal from './CredentialsModal';
 
 // ...
 
@@ -27,6 +28,8 @@ export default function ClusterManager() {
     const [loading, setLoading] = useState(false);
     const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
+    const [selectedInstanceName, setSelectedInstanceName] = useState<string>('');
 
     useEffect(() => {
         async function load() {
@@ -96,8 +99,8 @@ export default function ClusterManager() {
                 provider,
                 instances: group,
                 status: 'active', // Simplified
-                cpuTotal: group.length * 2, // Placeholder
-                ramTotal: group.length * 4  // Placeholder
+                cpuTotal: group.reduce((sum, inst) => sum + (inst.cpu || 0), 0),
+                ramTotal: group.reduce((sum, inst) => sum + (inst.ram || 0), 0)
             };
         });
     };
@@ -185,11 +188,11 @@ export default function ClusterManager() {
                                 <span className="text-xl font-bold text-gray-800">{selectedCluster.instances.length}</span>
                             </div>
                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                <span className="block text-xs text-gray-500 uppercase">CPUs (Est.)</span>
+                                <span className="block text-xs text-gray-500 uppercase">CPUs</span>
                                 <span className="text-xl font-bold text-gray-800">{selectedCluster.cpuTotal}</span>
                             </div>
                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                <span className="block text-xs text-gray-500 uppercase">RAM (Est.)</span>
+                                <span className="block text-xs text-gray-500 uppercase">RAM</span>
                                 <span className="text-xl font-bold text-gray-800">{selectedCluster.ramTotal} GB</span>
                             </div>
                         </div>
@@ -200,7 +203,7 @@ export default function ClusterManager() {
                                 <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100 text-sm">
                                     <div>
                                         <p className="font-medium text-gray-700">{inst.name || inst.Name || inst.InstanceId}</p>
-                                        <p className="text-xs text-gray-500 font-mono">{inst.external_ips?.join(', ') || inst.PublicIpAddress || 'No IP'}</p>
+                                        <p className="text-xs text-gray-500 font-mono">{inst.external_ips?.join(', ') || inst.PublicIpAddress || 'Sin IP'}</p>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <span className={`px-2 py-1 rounded text-xs ${(inst.status === 'RUNNING' || inst.State?.Name === 'running')
@@ -250,7 +253,20 @@ export default function ClusterManager() {
                                             className="p-1 text-yellow-600 hover:bg-yellow-50 rounded transition-colors"
                                             title="Stop Instance"
                                         >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>
+                                        </button>
+
+                                        {/* Credentials Button */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedInstanceName(inst.name || inst.Name || inst.InstanceId || '');
+                                                setCredentialsModalOpen(true);
+                                            }}
+                                            className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                                            title="Ver Credenciales SSH"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
                                         </button>
 
                                         {/* Delete Button */}
@@ -262,7 +278,7 @@ export default function ClusterManager() {
                                                     if (selectedCluster.provider === 'gcp') {
                                                         await deleteGcpInstance(inst.name, inst.zone);
                                                     } else {
-                                                        await deleteAwsInstance(inst.InstanceId!, undefined);
+                                                        await deleteAwsInstance(inst.InstanceId!);
                                                     }
                                                     refresh();
                                                 } catch (err) {
@@ -286,6 +302,13 @@ export default function ClusterManager() {
                     </div>
                 )}
             </div>
+
+            {/* Credentials Modal */}
+            <CredentialsModal
+                instanceName={selectedInstanceName}
+                isOpen={credentialsModalOpen}
+                onClose={() => setCredentialsModalOpen(false)}
+            />
         </div>
     );
 }

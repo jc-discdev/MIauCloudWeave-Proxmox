@@ -1,17 +1,24 @@
 ---
 import '../styles/global.css'
+import CloudAssistant from '../components/CloudAssistant';
 ---
 <!doctype html>
-<html lang="en">
+<html lang="es">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
+		<title>CloudWeave</title>
 	</head>
-	<body>
-		<slot />
+	<body class="bg-white text-gray-900 transition-colors duration-300 flex flex-col min-h-screen">
+		<div class="flex-grow">
+			<slot />
+		</div>
+		<footer class="bg-gray-100 py-6 text-center text-gray-600 text-sm mt-auto">
+			<p>&copy; {new Date().getFullYear()} CloudWeave. Todos los derechos reservados.</p>
+		</footer>
+		<CloudAssistant client:load />
 	</body>
 </html>
 

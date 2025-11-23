@@ -19,6 +19,8 @@ export interface Instance {
     zone?: string;
     internal_ips?: string[];
     external_ips?: string[];
+    cpu?: number;
+    ram?: number;
     // AWS specific
     InstanceId?: string;
     Name?: string;
@@ -163,6 +165,32 @@ export async function createAllInstances(payload: { gcp?: CreateGcpRequest, aws?
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+    });
+    return res.json();
+}
+
+export async function askAi(prompt: string): Promise<{ response: string | { command: string, parameters: any } }> {
+    const res = await fetch(`${API_BASE}/ai/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+    });
+    return res.json();
+}
+
+export async function getCredentials(instanceName?: string): Promise<any> {
+    const url = instanceName
+        ? `${API_BASE}/credentials?instance_name=${instanceName}`
+        : `${API_BASE}/credentials`;
+    const res = await fetch(url);
+    return res.json();
+}
+
+export async function executeAi(command: any): Promise<any> {
+    const res = await fetch(`${API_BASE}/ai/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(command),
     });
     return res.json();
 }

@@ -195,13 +195,13 @@ export default function ClusterCreator() {
                         onClick={() => setIsHybrid(false)}
                         className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${!isHybrid ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        Single Provider
+                        Proveedor Único
                     </button>
                     <button
                         onClick={() => setIsHybrid(true)}
                         className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${isHybrid ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        Hybrid (Multi-Cloud)
+                        Híbrido (Multi-Cloud)
                     </button>
                 </div>
             </div>
