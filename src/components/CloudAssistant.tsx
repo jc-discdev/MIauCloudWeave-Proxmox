@@ -8,9 +8,37 @@ interface Message {
 }
 
 export default function CloudAssistant() {
+    // Cookie helper functions
+    const getCookie = (name: string): string | null => {
+        if (typeof document === 'undefined') return null;
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+        return null;
+    };
+
+    const setCookie = (name: string, value: string, days: number) => {
+        if (typeof document === 'undefined') return;
+        // Check if user has accepted cookies
+        const consent = getCookie('cookieConsent');
+        if (consent !== 'accepted') return; // Don't save cookies if not accepted
+
+        const expires = new Date();
+        expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+        document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
+    };
+
     const [isOpen, setIsOpen] = useState(false);
     const [showNotification, setShowNotification] = useState(true);
-    const [showBubble, setShowBubble] = useState(true);
+    const [showBubble, setShowBubble] = useState(false);
+
+    // Check cookie after component mounts (client-side only)
+    useEffect(() => {
+        const dismissed = getCookie('chatBubbleDismissed');
+        if (dismissed !== 'true') {
+            setShowBubble(true);
+        }
+    }, []);
     const [messages, setMessages] = useState<Message[]>([
         { role: 'ai', content: 'Hola! Soy tu asistente de infraestructuras en el Cloud. ¿En qué puedo ayudarte hoy?' },
         { role: 'ai', content: 'Puedes pedirme que cree un cluster o una máquina virtual. Por ejemplo: "Crea un cluster con 3 máquinas" o "Crea una máquina virtual con 2 vCPUs y 4 GB de RAM".' },
@@ -281,6 +309,7 @@ export default function CloudAssistant() {
                         onClick={(e) => {
                             e.stopPropagation();
                             setShowBubble(false);
+                            setCookie('chatBubbleDismissed', 'true', 30); // Cookie expires in 30 days
                         }}
                         className="text-white/80 hover:text-white transition-colors" >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,6 +326,7 @@ export default function CloudAssistant() {
                     if (!isOpen) {
                         setShowNotification(false);
                         setShowBubble(false);
+                        setCookie('chatBubbleDismissed', 'true', 30); // Cookie expires in 30 days
                     }
                 }}
                 className={`
