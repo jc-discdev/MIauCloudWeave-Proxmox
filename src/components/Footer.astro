@@ -1,17 +1,5 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import NodeCreator from '../components/ClusterCreator';
-// Force rebuild
 ---
-
-<Layout>
-
-<div class="flex mt-5 mb-5 justify-center">
-    <div class="w-full max-w-4xl p-5">
-        <NodeCreator client:load />
-    </div>
-</div>
-
 <div class="bg-gray-800 p-5">
 	<div class="flex justify-center gap-5">
 		<button type="button" class="text-white bg-[#0f1419] hover:bg-[#0f1419]/90 focus:ring-4 focus:outline-none focus:ring-[#0f1419]/50 box-border border border-transparent font-medium leading-5 rounded-base text-sm px-4 py-2.5 text-center inline-flex items-center">
@@ -27,5 +15,6 @@ import NodeCreator from '../components/ClusterCreator';
 			@MIau
 		</button>
 	</div>
-</div>
-</Layout>
+    <footer class="bg-gray-100 py-6 text-center text-gray-600 text-sm mt-auto">
+			<p>&copy; {new Date().getFullYear()} CloudWeave. Todos los derechos reservados.</p>
+		</footer>

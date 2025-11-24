@@ -1,7 +1,8 @@
 ---
 import '../styles/global.css'
 import CloudAssistant from '../components/CloudAssistant';
-import Top from '../components/Top.astro'
+import Top from '../components/header/Top.astro'
+import Footer from '../components/Footer.astro'
 ---
 <!doctype html>
 <html lang="es">
@@ -17,18 +18,7 @@ import Top from '../components/Top.astro'
 			<Top />
 			<slot />
 		</div>
-		<footer class="bg-gray-100 py-6 text-center text-gray-600 text-sm mt-auto">
-			<p>&copy; {new Date().getFullYear()} CloudWeave. Todos los derechos reservados.</p>
-		</footer>
+		<Footer />
 		<CloudAssistant client:load />
 	</body>
 </html>
-
-<style>
-	html,
-	body {
-		margin: 0;
-		width: 100%;
-		height: 100%;
-	}
-</style>

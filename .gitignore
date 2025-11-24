@@ -1,5 +1,6 @@
 
 # Logs
+backend
 logs
 *.log
 npm-debug.log*
@@ -62,3 +63,4 @@ dist/
 mainpy.md
 backend/
 ENCENDER_FRONT_Y_BACK.MD
+.prettierrc
