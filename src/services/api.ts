@@ -1,57 +1,53 @@
-export interface GcpInstanceType {
+// Proxmox VM/LXC Interfaces
+export interface ProxmoxVM {
+    vmid: number;
     name: string;
-    cpus: number;
-    ram_gb: number;
-    description?: string;
+    node: string;
+    type: 'qemu' | 'lxc';
+    status: 'running' | 'stopped';
+    cpu: number;
+    memory: number;
+    disk: number;
+    uptime?: number;
+    ip: string | null;
+    template?: boolean;
 }
 
-export interface AwsInstanceType {
-    instance_type: string;
-    vcpus: number;
-    memory_gb: number;
-}
-
-export interface Instance {
+export interface CreateProxmoxRequest {
     name: string;
-    status?: string;
-    machine_type?: string;
-    creation_timestamp?: string;
-    zone?: string;
-    internal_ips?: string[];
-    external_ips?: string[];
-    cpu?: number;
-    ram?: number;
-    // AWS specific
-    InstanceId?: string;
-    Name?: string;
-    PublicIpAddress?: string;
-    State?: { Name: string };
-}
-
-export interface CreateGcpRequest {
-    credentials?: string;
-    zone: string;
-    name: string;
-    machine_type: string;
+    vm_type: 'qemu' | 'lxc';
+    cores: number;
+    memory: number;
+    disk_size: number;
+    node?: string;
+    template?: number;
+    iso?: string;
+    lxc_template?: string;
+    storage?: string;
+    bridge?: string;
+    cluster_type?: string;
     count?: number;
-    image_project?: string;
-    image_family?: string;
-    image?: string;
+    ssh_key?: string;
     password?: string;
+    start?: boolean;
 }
 
-export interface CreateAwsRequest {
-    region: string;
-    name?: string;
-    instance_type: string;
-    min_count?: number;
-    max_count?: number;
-    image_id?: string;
-    password?: string;
+export interface ProxmoxCredentials {
+    username: string;
+    password: string;
+    ip: string;
+    provider: 'proxmox';
+    node: string;
+    vmid: number;
+    type: 'qemu' | 'lxc';
 }
 
 export interface CreateResponse {
     success: boolean;
+    vmid?: number;
+    name?: string;
+    ip?: string;
+    password?: string;
     created?: any[];
     result?: any;
     error?: string;
@@ -60,41 +56,39 @@ export interface CreateResponse {
 export interface ListResponse {
     success: boolean;
     count: number;
-    instances: Instance[];
+    vms: ProxmoxVM[];
     message?: string;
+}
+
+export interface ClusterCreateRequest {
+    manager: {
+        name: string;
+        vm_type: 'qemu' | 'lxc';
+        cores: number;
+        memory: number;
+        disk_size: number;
+    };
+    workers: Array<{
+        name: string;
+        vm_type: 'qemu' | 'lxc';
+        cores: number;
+        memory: number;
+        disk_size: number;
+        count: number;
+    }>;
 }
 
 const API_BASE = '/api';
 
-export async function getGcpInstanceTypes(zone: string, cpus: number, ram_gb: number): Promise<GcpInstanceType[]> {
-    const params = new URLSearchParams({ zone, cpus: cpus.toString(), ram_gb: ram_gb.toString() });
-    const res = await fetch(`${API_BASE}/instance-types/gcp?${params}`);
-    const data = await res.json();
-    return data.instance_types || [];
-}
-
-export async function getAwsInstanceTypes(region: string, min_vcpus: number, min_memory_gb: number): Promise<AwsInstanceType[]> {
-    const params = new URLSearchParams({
-        region,
-        min_vcpus: min_vcpus.toString(),
-        min_memory_gb: min_memory_gb.toString()
-    });
-    const res = await fetch(`${API_BASE}/instance-types/aws?${params}`);
-    const data = await res.json();
-    return data.instance_types || [];
-}
-
-export async function createGcpInstance(payload: CreateGcpRequest): Promise<CreateResponse> {
-    const res = await fetch(`${API_BASE}/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credentials: './credentials.json', ...payload }),
-    });
+// List all VMs and LXC containers
+export async function listProxmoxVMs(): Promise<ListResponse> {
+    const res = await fetch(`${API_BASE}/proxmox/list`);
     return res.json();
 }
 
-export async function createAwsInstance(payload: CreateAwsRequest): Promise<CreateResponse> {
-    const res = await fetch(`${API_BASE}/aws/create`, {
+// Create a VM or LXC container
+export async function createProxmoxVM(payload: CreateProxmoxRequest): Promise<CreateResponse> {
+    const res = await fetch(`${API_BASE}/proxmox/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -102,66 +96,49 @@ export async function createAwsInstance(payload: CreateAwsRequest): Promise<Crea
     return res.json();
 }
 
-export async function listGcpInstances(zone?: string): Promise<ListResponse> {
-    const params = new URLSearchParams();
-    if (zone) params.append('zone', zone);
-    const res = await fetch(`${API_BASE}/list?${params}`);
-    return res.json();
-}
-
-export async function listAwsInstances(region?: string): Promise<ListResponse> {
-    const params = new URLSearchParams();
-    if (region) params.append('region', region);
-    const res = await fetch(`${API_BASE}/aws/list?${params}`);
-    return res.json();
-}
-
-export async function deleteGcpInstance(name: string, zone?: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/delete`, {
+// Delete a VM or container
+export async function deleteProxmoxVM(name: string, force: boolean = true): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/proxmox/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credentials: './credentials.json', name, zone }),
+        body: JSON.stringify({ name, force }),
     });
     return res.json();
 }
 
-export async function deleteAwsInstance(instanceId: string, region?: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/aws/delete`, {
+// Start a VM or container
+export async function startProxmoxVM(name: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/proxmox/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instance_id: instanceId, region }),
+        body: JSON.stringify({ name }),
     });
     return res.json();
 }
 
-export async function startInstance(provider: 'gcp' | 'aws', id: string, zoneOrRegion?: string): Promise<{ success: boolean }> {
-    const payload: any = { provider, id };
-    if (provider === 'gcp') payload.zone = zoneOrRegion;
-    else payload.region = zoneOrRegion;
-
-    const res = await fetch(`${API_BASE}/action/start`, {
+// Stop a VM or container
+export async function stopProxmoxVM(name: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/proxmox/stop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credentials: './credentials.json', ...payload }),
+        body: JSON.stringify({ name }),
     });
     return res.json();
 }
 
-export async function stopInstance(provider: 'gcp' | 'aws', id: string, zoneOrRegion?: string): Promise<{ success: boolean }> {
-    const payload: any = { provider, id };
-    if (provider === 'gcp') payload.zone = zoneOrRegion;
-    else payload.region = zoneOrRegion;
-
-    const res = await fetch(`${API_BASE}/action/stop`, {
+// Restart a VM or container
+export async function restartProxmoxVM(name: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/proxmox/restart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credentials: './credentials.json', ...payload }),
+        body: JSON.stringify({ name }),
     });
     return res.json();
 }
 
-export async function createAllInstances(payload: { gcp?: CreateGcpRequest, aws?: CreateAwsRequest, cluster_type?: string }): Promise<any> {
-    const res = await fetch(`${API_BASE}/all/create`, {
+// Create a Docker Swarm cluster
+export async function createCluster(payload: ClusterCreateRequest): Promise<CreateResponse> {
+    const res = await fetch(`${API_BASE}/cluster/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -169,20 +146,22 @@ export async function createAllInstances(payload: { gcp?: CreateGcpRequest, aws?
     return res.json();
 }
 
+// Get credentials for instances
+export async function getCredentials(instanceName?: string): Promise<any> {
+    const url = instanceName
+        ? `${API_BASE}/credentials?instance_name=${instanceName}`
+        : `${API_BASE}/credentials`;
+    const res = await fetch(url);
+    return res.json();
+}
+
+// AI Assistant functions
 export async function askAi(prompt: string): Promise<{ response: string | { command: string, parameters: any } }> {
     const res = await fetch(`${API_BASE}/ai/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
     });
-    return res.json();
-}
-
-export async function getCredentials(instanceName?: string): Promise<any> {
-    const url = instanceName
-        ? `${API_BASE}/credentials?instance_name=${instanceName}`
-        : `${API_BASE}/credentials`;
-    const res = await fetch(url);
     return res.json();
 }
 

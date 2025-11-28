@@ -59,7 +59,9 @@ dist/
 
 # Wrangler output
 .wrangler/
-**.json
+# **.json # Commented out aggressive json ignore
+tsconfig.json
+package.json
 mainpy.md
 backend/
 ENCENDER_FRONT_Y_BACK.MD

@@ -24,7 +24,7 @@ export default function CloudAssistant() {
         if (consent !== 'accepted') return; // Don't save cookies if not accepted
 
         const expires = new Date();
-        expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+        expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000); // set expiration date
         document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
     };
 
@@ -40,9 +40,9 @@ export default function CloudAssistant() {
         }
     }, []);
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'ai', content: 'Hola! Soy tu asistente de infraestructuras en el Cloud. ¿En qué puedo ayudarte hoy?' },
-        { role: 'ai', content: 'Puedes pedirme que cree un cluster o una máquina virtual. Por ejemplo: "Crea un cluster con 3 máquinas" o "Crea una máquina virtual con 2 vCPUs y 4 GB de RAM".' },
-        { role: 'ai', content: 'Actualmente funciono con AWS y Google Cloud Platform.' }
+        { role: 'ai', content: 'Hola! Soy tu asistente de infraestructuras en Proxmox. ¿En qué puedo ayudarte hoy?' },
+        { role: 'ai', content: 'Puedes pedirme que cree un cluster o una máquina virtual. Por ejemplo: "Crea un cluster con 3 máquinas" o "Crea una VM con 2 vCPUs y 4 GB de RAM".' },
+        { role: 'ai', content: 'Actualmente funciono con Proxmox VE, gestionando VMs QEMU y contenedores LXC.' }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);

@@ -1,23 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
-    listGcpInstances,
-    listAwsInstances,
-    deleteGcpInstance,
-    deleteAwsInstance,
-    startInstance,
-    stopInstance,
-    type Instance
+    listProxmoxVMs,
+    deleteProxmoxVM,
+    startProxmoxVM,
+    stopProxmoxVM,
+    type ProxmoxVM
 } from '../services/api';
 import CredentialsModal from './CredentialsModal';
 
-// ...
-
-
-
 interface Cluster {
     name: string;
-    provider: 'gcp' | 'aws';
-    instances: Instance[];
+    instances: ProxmoxVM[];
     status: 'active' | 'mixed' | 'stopped';
     cpuTotal: number;
     ramTotal: number;
@@ -35,33 +28,17 @@ export default function ClusterManager() {
         async function load() {
             setLoading(true);
             try {
-                const [gcpRes, awsRes] = await Promise.all([
-                    listGcpInstances(),
-                    listAwsInstances()
-                ]);
+                const res = await listProxmoxVMs();
 
-                const newClusters: Cluster[] = [];
+                if (res.success && res.vms) {
+                    const grouped = groupInstances(res.vms);
+                    setClusters(grouped);
 
-                // Process GCP
-                if (gcpRes.success && gcpRes.instances) {
-                    const grouped = groupInstances(gcpRes.instances, 'gcp');
-                    newClusters.push(...grouped);
-                }
-
-                // Process AWS
-                // AWS list endpoint returns array directly if success, or check structure
-                // Based on api.ts: listAwsInstances returns ListResponse { success, count, instances }
-                if (awsRes.success && awsRes.instances) {
-                    const grouped = groupInstances(awsRes.instances, 'aws');
-                    newClusters.push(...grouped);
-                }
-
-                setClusters(newClusters);
-
-                // Update selected cluster if it exists
-                if (selectedCluster) {
-                    const updated = newClusters.find(c => c.name === selectedCluster.name && c.provider === selectedCluster.provider);
-                    setSelectedCluster(updated || null);
+                    // Update selected cluster if it exists
+                    if (selectedCluster) {
+                        const updated = grouped.find(c => c.name === selectedCluster.name);
+                        setSelectedCluster(updated || null);
+                    }
                 }
             } catch (err) {
                 console.error("Failed to load clusters", err);
@@ -72,15 +49,12 @@ export default function ClusterManager() {
         load();
     }, [refreshKey]);
 
-    const groupInstances = (instances: Instance[], provider: 'gcp' | 'aws'): Cluster[] => {
-        const groups: { [key: string]: Instance[] } = {};
+    const groupInstances = (instances: ProxmoxVM[]): Cluster[] => {
+        const groups: { [key: string]: ProxmoxVM[] } = {};
 
         instances.forEach(inst => {
-            // Extract cluster name from instance name (e.g., "t3-mycluster-1" -> "t3-mycluster")
-            // Assumption: Cluster name is the prefix before the last hyphen if it ends in a number,
-            // or just the name if it doesn't match that pattern.
-            // Simpler approach: Group by base name (removing trailing digits/hyphens)
-            let baseName = inst.name || inst.Name || 'unknown';
+            // Extract cluster name from instance name (e.g., "mycluster-1" -> "mycluster")
+            let baseName = inst.name;
             // Remove trailing "-N" or just numbers
             baseName = baseName.replace(/-\d+$/, '').replace(/\d+$/, '');
 
@@ -90,17 +64,24 @@ export default function ClusterManager() {
 
         return Object.keys(groups).map(name => {
             const group = groups[name];
-            // Calculate totals (approximate)
-            // GCP: machine_type (e.g. e2-medium -> 2 vCPU, 4GB) - need mapping or parsing
-            // AWS: InstanceType (e.g. t3.micro -> 2 vCPU, 1GB)
-            // For now, just counting nodes
+
+            // Determine cluster status
+            const runningCount = group.filter(vm => vm.status === 'running').length;
+            let status: 'active' | 'mixed' | 'stopped';
+            if (runningCount === group.length) {
+                status = 'active';
+            } else if (runningCount === 0) {
+                status = 'stopped';
+            } else {
+                status = 'mixed';
+            }
+
             return {
                 name,
-                provider,
                 instances: group,
-                status: 'active', // Simplified
-                cpuTotal: group.reduce((sum, inst) => sum + (inst.cpu || 0), 0),
-                ramTotal: group.reduce((sum, inst) => sum + (inst.ram || 0), 0)
+                status,
+                cpuTotal: group.reduce((sum, inst) => sum + inst.cpu, 0),
+                ramTotal: group.reduce((sum, inst) => sum + Math.round(inst.memory / 1024), 0) // Convert MB to GB
             };
         });
     };
@@ -108,21 +89,15 @@ export default function ClusterManager() {
     const refresh = () => setRefreshKey(k => k + 1);
 
     const handleDeleteCluster = async (cluster: Cluster) => {
-        if (!confirm(`Are you sure you want to delete cluster "${cluster.name}" (${cluster.instances.length} nodes)?`)) return;
+        if (!confirm(`¿Estás seguro de eliminar el cluster "${cluster.name}" (${cluster.instances.length} nodos)?`)) return;
 
         try {
-            const promises = cluster.instances.map(inst => {
-                if (cluster.provider === 'gcp') {
-                    return deleteGcpInstance(inst.name, inst.zone);
-                } else {
-                    return deleteAwsInstance(inst.InstanceId!, undefined); // Region inferred by backend if not passed, or we need to store it
-                }
-            });
+            const promises = cluster.instances.map(inst => deleteProxmoxVM(inst.name));
             await Promise.all(promises);
             refresh();
             setSelectedCluster(null);
         } catch (err) {
-            alert("Error deleting cluster");
+            alert("Error al eliminar el cluster");
         }
     };
 
@@ -142,7 +117,7 @@ export default function ClusterManager() {
                     )}
                     {clusters.map(cluster => (
                         <div
-                            key={`${cluster.provider}-${cluster.name}`}
+                            key={cluster.name}
                             onClick={() => setSelectedCluster(cluster)}
                             className={`p-3 rounded-lg cursor-pointer transition-all ${selectedCluster === cluster
                                 ? 'bg-blue-50 border-blue-200 shadow-sm ring-1 ring-blue-300'
@@ -151,11 +126,14 @@ export default function ClusterManager() {
                         >
                             <div className="flex justify-between items-center mb-1">
                                 <h3 className="font-semibold text-gray-800">{cluster.name}</h3>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${cluster.provider === 'gcp' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-                                    {cluster.provider.toUpperCase()}
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${cluster.status === 'active' ? 'bg-green-100 text-green-800' :
+                                        cluster.status === 'stopped' ? 'bg-gray-100 text-gray-800' :
+                                            'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                    {cluster.status}
                                 </span>
                             </div>
-                            <p className="text-xs text-gray-500">{cluster.instances.length} nodos · {cluster.status}</p>
+                            <p className="text-xs text-gray-500">{cluster.instances.length} nodos · Proxmox</p>
                         </div>
                     ))}
                 </div>
@@ -169,7 +147,7 @@ export default function ClusterManager() {
                             <div>
                                 <h2 className="text-2xl font-bold text-gray-900">{selectedCluster.name}</h2>
                                 <p className="text-sm text-gray-500 mt-1">
-                                    Proveedor: <span className="font-medium text-gray-700">{selectedCluster.provider.toUpperCase()}</span>
+                                    Proveedor: <span className="font-medium text-gray-700">Proxmox VE</span>
                                 </p>
                             </div>
                             <div className="flex space-x-2">
@@ -202,15 +180,21 @@ export default function ClusterManager() {
                             {selectedCluster.instances.map((inst, idx) => (
                                 <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-100 text-sm">
                                     <div>
-                                        <p className="font-medium text-gray-700">{inst.name || inst.Name || inst.InstanceId}</p>
-                                        <p className="text-xs text-gray-500 font-mono">{inst.external_ips?.join(', ') || inst.PublicIpAddress || 'Sin IP'}</p>
+                                        <div className="flex items-center">
+                                            <span className="text-lg mr-2">{inst.type === 'qemu' ? '🖥️' : '📦'}</span>
+                                            <p className="font-medium text-gray-700">{inst.name}</p>
+                                        </div>
+                                        <p className="text-xs text-gray-500 font-mono ml-7">{inst.ip || 'Sin IP'}</p>
+                                        <p className="text-xs text-gray-500 ml-7">
+                                            {inst.cpu} vCPU · {inst.memory} MB RAM · {inst.disk} GB
+                                        </p>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <span className={`px-2 py-1 rounded text-xs ${(inst.status === 'RUNNING' || inst.State?.Name === 'running')
-                                            ? 'bg-green-100 text-green-700'
-                                            : 'bg-gray-200 text-gray-600'
+                                        <span className={`px-2 py-1 rounded text-xs ${inst.status === 'running'
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-gray-200 text-gray-600'
                                             }`}>
-                                            {inst.status || inst.State?.Name}
+                                            {inst.status}
                                         </span>
 
                                         {/* Start Button */}
@@ -218,18 +202,14 @@ export default function ClusterManager() {
                                             onClick={async (e) => {
                                                 e.stopPropagation();
                                                 try {
-                                                    if (selectedCluster.provider === 'gcp') {
-                                                        await startInstance('gcp', inst.name, inst.zone);
-                                                    } else {
-                                                        await startInstance('aws', inst.InstanceId!, inst.zone);
-                                                    }
+                                                    await startProxmoxVM(inst.name);
                                                     refresh();
                                                 } catch (err) {
-                                                    alert("Failed to start instance");
+                                                    alert("Error al iniciar la instancia");
                                                 }
                                             }}
                                             className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
-                                            title="Start Instance"
+                                            title="Iniciar"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                         </button>
@@ -238,20 +218,16 @@ export default function ClusterManager() {
                                         <button
                                             onClick={async (e) => {
                                                 e.stopPropagation();
-                                                if (!confirm(`Stop instance ${inst.name || inst.InstanceId}?`)) return;
+                                                if (!confirm(`¿Detener ${inst.name}?`)) return;
                                                 try {
-                                                    if (selectedCluster.provider === 'gcp') {
-                                                        await stopInstance('gcp', inst.name, inst.zone);
-                                                    } else {
-                                                        await stopInstance('aws', inst.InstanceId!, inst.zone);
-                                                    }
+                                                    await stopProxmoxVM(inst.name);
                                                     refresh();
                                                 } catch (err) {
-                                                    alert("Failed to stop instance");
+                                                    alert("Error al detener la instancia");
                                                 }
                                             }}
                                             className="p-1 text-yellow-600 hover:bg-yellow-50 rounded transition-colors"
-                                            title="Stop Instance"
+                                            title="Detener"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>
                                         </button>
@@ -260,7 +236,7 @@ export default function ClusterManager() {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setSelectedInstanceName(inst.name || inst.Name || inst.InstanceId || '');
+                                                setSelectedInstanceName(inst.name);
                                                 setCredentialsModalOpen(true);
                                             }}
                                             className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
@@ -273,20 +249,16 @@ export default function ClusterManager() {
                                         <button
                                             onClick={async (e) => {
                                                 e.stopPropagation();
-                                                if (!confirm(`Delete instance ${inst.name || inst.InstanceId}?`)) return;
+                                                if (!confirm(`¿Eliminar ${inst.name}?`)) return;
                                                 try {
-                                                    if (selectedCluster.provider === 'gcp') {
-                                                        await deleteGcpInstance(inst.name, inst.zone);
-                                                    } else {
-                                                        await deleteAwsInstance(inst.InstanceId!);
-                                                    }
+                                                    await deleteProxmoxVM(inst.name);
                                                     refresh();
                                                 } catch (err) {
-                                                    alert("Failed to delete instance");
+                                                    alert("Error al eliminar la instancia");
                                                 }
                                             }}
                                             className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                            title="Delete Instance"
+                                            title="Eliminar"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                         </button>
